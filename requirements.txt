@@ -1,0 +1,10 @@
+# Packages that device_finder.py needs: Python's way of talking to Windows' own Bluetooth.
+# Install them with:   .venv\Scripts\python.exe -m pip install -r requirements.txt
+winrt-runtime==4.1.0
+winrt-Windows.Devices.Bluetooth==4!10.0.28000.2957
+winrt-Windows.Devices.Bluetooth.Advertisement==4!10.0.28000.2957
+winrt-Windows.Devices.Bluetooth.Rfcomm==4!10.0.28000.2957
+winrt-Windows.Devices.Enumeration==4!10.0.28000.2957
+winrt-Windows.Foundation==4!10.0.28000.2957
+winrt-Windows.Foundation.Collections==4!10.0.28000.2957
+winrt-Windows.Storage.Streams==4!10.0.28000.2957

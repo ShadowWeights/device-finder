@@ -1,0 +1,12 @@
+# Files that must never be uploaded to GitHub.
+
+# The installed packages - big, and they only work on this computer.
+# Anyone can rebuild them from requirements.txt.
+.venv/
+
+# Python's own temporary files.
+__pycache__/
+*.pyc
+
+# The phones this computer has seen (their Bluetooth addresses) - personal.
+phones.json

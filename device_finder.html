@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Device Finder</title>
+<style>
+  :root {
+    --bg: #f3f5f8; --card: #ffffff; --text: #17212b; --muted: #5f6c7b; --line: #dfe5ec;
+    --track: #e6eaf0; --green: #15803d; --lime: #4d7c0f; --amber: #b45309; --red: #b91c1c;
+    --blue: #1d4ed8; --on-blue: #ffffff; --blue-soft: #eaf0ff; --likely: #fff5e6; --new: #e3f6ea;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 6px 18px rgba(16, 24, 40, .06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1318; --card: #161d25; --text: #e6edf3; --muted: #97a5b4; --line: #26323f;
+      --track: #26323f; --green: #22c55e; --lime: #a3e635; --amber: #f59e0b; --red: #f87171;
+      --blue: #60a5fa; --on-blue: #0b1220; --blue-soft: #18263c; --likely: #2b2210; --new: #0f2a1a;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.45 "Segoe UI", system-ui, sans-serif; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 18px 16px 40px; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
+           justify-content: space-between; margin-bottom: 14px; }
+  h1 { font-size: 24px; margin: 0; }
+  h2 { font-size: 18px; margin: 0; }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.live { background: var(--green); animation: pulse 1.2s ease-in-out infinite; }
+  .dot.bad { background: var(--red); }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .warn { color: var(--red); font-weight: 600; }
+
+  .grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 14px; }
+  @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+          padding: 16px 18px; box-shadow: var(--shadow); min-width: 0; }
+
+  .meter { text-align: center; }
+  .who { font-size: 20px; font-weight: 650; overflow-wrap: anywhere; }
+  .why { font-size: 14px; color: var(--muted); min-height: 21px; }
+  .why.isnew { color: var(--green); font-weight: 650; }
+  .gauge { width: 100%; max-width: 430px; display: block; margin: 8px auto 0; }
+  .gauge text { fill: var(--text); }
+  .gauge .num { font-size: 58px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .gauge .unit, .gauge .end { fill: var(--muted); font-size: 15px; }
+  .gauge .end { font-size: 12px; }
+  #gTrack { stroke: var(--track); }
+  #gFill { transition: stroke-dasharray .12s linear, stroke .3s; }
+  #gRaw { fill: var(--card); stroke: var(--text); stroke-width: 3; transition: cx .12s, cy .12s; }
+  .word { font-size: 28px; font-weight: 750; letter-spacing: .04em; margin-top: 4px; }
+  .hint { color: var(--muted); }
+  .trend { font-size: 18px; font-weight: 600; margin: 10px 0 2px; min-height: 27px; }
+  .reach { font-size: 14px; color: var(--muted); min-height: 21px; }
+  .reach .dots { font-size: 15px; letter-spacing: .12em; margin-right: 6px; }
+  .reach .ok { color: var(--green); }
+  .reach .miss { color: var(--red); }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center; margin-top: 12px; }
+  .btn { font: inherit; font-weight: 600; border: 1px solid var(--line); background: var(--card);
+         color: var(--text); padding: 9px 16px; border-radius: 10px; cursor: pointer; }
+  .btn:hover:not(:disabled) { border-color: var(--blue); }
+  .btn:disabled { cursor: default; opacity: .65; }
+  .btn.primary { background: var(--blue); border-color: var(--blue); color: var(--on-blue); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .seg button { font: inherit; font-size: 14px; font-weight: 600; border: 0; background: var(--card);
+                color: var(--muted); padding: 9px 13px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--blue-soft); color: var(--text); }
+  [hidden] { display: none !important; }
+
+  .steps ol { margin: 10px 0 0; padding-left: 22px; }
+  .steps li { margin: 8px 0; }
+  .steps a { color: var(--blue); font-weight: 600; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 6px; }
+  .small { font-size: 14px; color: var(--muted); }
+  details.trick { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin-top: 12px; }
+  details.trick summary { cursor: pointer; font-weight: 650; }
+  details.trick p { margin: 8px 0 2px; font-size: 14px; }
+  .note { font-size: 14px; color: var(--muted); border-top: 1px solid var(--line);
+          margin: 12px 0 0; padding-top: 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 10px; border: 1px solid var(--line);
+          border-radius: 10px; padding: 6px 8px 6px 12px; font-size: 14px; background: var(--card); }
+  .chip.on { border-color: var(--blue); background: var(--blue-soft); }
+  .chip small { color: var(--muted); display: block; font-size: 12px; }
+  .mini { font: inherit; font-size: 13px; font-weight: 600; border: 1px solid var(--line); background: var(--card);
+          color: var(--text); padding: 4px 10px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+  .mini:hover { border-color: var(--blue); }
+  .mini.on { background: var(--blue); border-color: var(--blue); color: var(--on-blue); }
+  input.addr { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px;
+               background: var(--card); color: var(--text); width: 210px; text-transform: uppercase; }
+
+  .list { margin-top: 14px; }
+  .list-head { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-start; justify-content: space-between; }
+  .list-head p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+  .classic { font-size: 14px; background: var(--blue-soft); border-radius: 10px; padding: 8px 12px; margin: 12px 0 0; }
+  .devs { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 12px; }
+  .dev { text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+         padding: 10px 12px; cursor: pointer; min-width: 0; }
+  .dev:hover, .dev:focus-visible { border-color: var(--blue); outline: none; }
+  .dev.likely { background: var(--likely); }
+  .dev.fresh { background: var(--new); }
+  .dev.not { opacity: .6; }
+  .dev.tracked { outline: 2px solid var(--blue); outline-offset: -1px; background: var(--blue-soft); opacity: 1; }
+  .dev-top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .dev-name { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badges { flex: none; }
+  .badge { font-size: 11px; font-weight: 700; letter-spacing: .05em; padding: 2px 7px;
+           border-radius: 99px; margin-left: 4px; background: var(--track); color: var(--text); }
+  .badge.new { background: var(--green); color: var(--on-blue); }
+  .dev-guess { font-size: 13px; color: var(--muted); margin: 2px 0 8px; }
+  .bar { height: 8px; border-radius: 99px; background: var(--track); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; border-radius: 99px; transition: width .3s; }
+  .dev-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; }
+  .dev-num { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .empty { color: var(--muted); padding: 10px 2px 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Device Finder</h1>
+    <div class="status"><span id="dot" class="dot"></span><span id="statusText">Connecting to the Device Finder program…</span></div>
+  </header>
+
+  <div class="grid">
+    <section class="card meter">
+      <div class="who" id="who">Looking for your device…</div>
+      <div class="why" id="why"></div>
+      <svg class="gauge" viewBox="0 0 300 180" aria-hidden="true">
+        <path id="gTrack" d="M 30 150 A 120 120 0 0 1 270 150" fill="none" stroke-width="22" stroke-linecap="round"/>
+        <path id="gFill" d="M 30 150 A 120 120 0 0 1 270 150" fill="none" stroke-width="22" stroke-linecap="round" stroke-dasharray="0 400" style="opacity:0"/>
+        <circle id="gRaw" r="7" cx="30" cy="150" style="opacity:0"/>
+        <text id="dbm" class="num" x="150" y="124" text-anchor="middle">--</text>
+        <text id="unit" class="unit" x="150" y="150" text-anchor="middle">dBm</text>
+        <text class="end" x="30" y="175" text-anchor="middle">weak</text>
+        <text class="end" x="270" y="175" text-anchor="middle">strong</text>
+      </svg>
+      <div class="word" id="word">&nbsp;</div>
+      <div class="hint" id="hint">&nbsp;</div>
+      <div class="trend" id="trend"></div>
+      <div class="reach" id="reach"></div>
+      <div class="controls">
+        <button class="btn primary" id="soundBtn" type="button">Turn sound on</button>
+        <div class="seg" role="group" aria-label="How fast the meter moves">
+          <button type="button" data-speed="fast">Fast</button>
+          <button type="button" data-speed="steady">Steady</button>
+        </div>
+        <button class="btn" id="autoBtn" type="button" hidden>Back to auto-pick</button>
+        <button class="btn" id="unfollowBtn" type="button" hidden>Stop following</button>
+      </div>
+    </section>
+
+    <section class="card steps">
+      <h2>How to find your device</h2>
+      <ol>
+        <li><b>Follow your device.</b> The laptop then "calls" its Bluetooth address about once a second.
+          A phone answers whenever its Bluetooth is <b>ON</b> – screen off, in a pocket, connected to earbuds: all fine.
+          It does <b>not</b> need to be visible.
+          <div class="chips" id="remembered"></div>
+          <div class="small" id="followInfo"></div>
+          <details class="trick">
+            <summary>Follow a different address</summary>
+            <div class="row"><input class="addr" id="addrBox" placeholder="AA:BB:CC:11:22:33" spellcheck="false" autocomplete="off">
+              <button class="btn" id="addrBtn" type="button">Follow</button></div>
+            <p>A phone shows its Bluetooth address in Settings → About phone → Status. The meter also remembers every phone it has seen.</p>
+          </details></li>
+        <li><b>Walk slowly</b> and pause 2–3 seconds at each spot. The big number is then the phone's <b>connection signal</b>:
+          <b>above 0</b> (like +5) = right here · <b>0</b> = within a few metres · <b>−1 to −9</b> = same room
+          · <b>−10 to −20</b> = next room · <b>below −20</b> = far away.
+          Up close it changes only a little – Bluetooth can't measure finer there, so use your eyes and ears for the last metres.
+          With sound on, faster beeps mean closer.</li>
+        <li><b>"OUT OF REACH" everywhere?</b> Then its Bluetooth is off, or it is more than ~10 m away.
+          <a href="https://www.google.com/android/find" target="_blank" rel="noopener">Press "Play sound" here</a> (it rings for 5 minutes, even on silent).
+          The LE listener below still catches phones that wake up:
+          <div class="row"><button class="btn" id="hideBtn" type="button">Hide what's here now</button>
+          <span class="small" id="hideInfo"></span></div>
+          <span class="small">New signals get a <span class="badge new">NEW</span> badge and a "ding".</span></li>
+      </ol>
+      <details class="trick">
+        <summary>Trick: make a silent phone show up (Quick Share)</summary>
+        <p>Install Google's <a href="https://support.google.com/android/answer/13801258" target="_blank" rel="noopener">Quick Share app for Windows</a>
+          on this laptop. Sign in with <b>the same Google account as your phone</b>, then start sending any small file.
+          Google says phones set to "Your devices" stay visible to their own account even with the screen off.
+          If your phone appears in Quick Share's list, it is nearby and switched on, and it may show up here as a NEW "Google Nearby" signal.</p>
+      </details>
+      <p class="note">Following only works when the phone's Bluetooth is ON. If it is off, the phone sends nothing at all, and no laptop can hear it – then only "Play sound" or a Wi-Fi check can help.</p>
+    </section>
+  </div>
+
+  <section class="card list">
+    <div class="list-head">
+      <div>
+        <h2>All Bluetooth signals around you</h2>
+        <p>Tap a device to put it on the big meter. Press "Follow" on a Classic device to call it.</p>
+      </div>
+      <button class="btn" id="searchBtn" type="button">Look for visible devices: OFF</button>
+    </div>
+    <div class="classic" id="searchInfo" hidden></div>
+    <div class="devs" id="devs"></div>
+    <div class="empty" id="empty">Nothing heard yet…</div>
+  </section>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const WEAK = -100, STRONG = -35;          // the two ends of the meter, in dBm
+const LINK_WEAK = -30, LINK_STRONG = 15;  // ...and for a followed phone's connection signal
+const fill = $("gFill"), rawDot = $("gRaw");
+const ARC = fill.getTotalLength();
+
+// ------------------------------------------------------------------- state
+const devices = new Map();      // device id -> newest information about it
+let status = null;              // what the program says about Bluetooth
+let totalPps = 0;               // LE signals per second, all devices together
+let serverNow = 0, gotAt = 0;   // the program's clock, and when we last heard from it
+let connected = false;
+let lockedId = null, lockedFp = "", lockedLast = 0, followNote = "";   // the device you tapped
+let tracked = null;             // the device on the meter right now (for the beeps)
+let hidden = null;              // after "Hide what's here now": { ids, fps, at }
+const dinged = new Set();       // NEW devices we already played a "ding" for
+let lastListDraw = -1e9;
+let soundOn = false, ticking = false, audio = null;
+let speed = "fast";
+try { speed = localStorage.getItem("deviceFinderSpeed") || "fast"; } catch (e) { /* private window */ }
+
+const now = () => serverNow + (performance.now() - gotAt) / 1000;
+const level = (d) => (d.fast === null ? null : speed === "steady" ? d.steady : d.fast);
+const frac = (rssi) => Math.min(1, Math.max(0, (rssi - WEAK) / (STRONG - WEAK)));
+// A followed phone gives a CONNECTION SIGNAL, on its own scale (0 = within a few
+// metres, above 0 = right here). Everything else is in dBm.
+const isLink = (d) => d.scale === "link";
+const fracOf = (d, v) => (v === null || v === undefined ? -1 : isLink(d)
+  ? Math.min(1, Math.max(0, (v - LINK_WEAK) / (LINK_STRONG - LINK_WEAK))) : frac(v));
+const numText = (d, v) => { const r = Math.round(v); return isLink(d) && r > 0 ? "+" + r : String(r); };
+// How long a reading stays "current": LE messages come many times a second,
+// a followed phone answers every ~2 s, a visible device is refreshed every 10–20 s.
+const freshFor = (d) => (d.via === "le" ? 3 : d.via === "link" ? 8 : 30);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function zone(rssi) {
+  if (rssi >= -60) return { word: "VERY CLOSE", hint: "about 1–2 metres away", color: "var(--green)" };
+  if (rssi >= -72) return { word: "NEAR", hint: "probably in the same room", color: "var(--lime)" };
+  if (rssi >= -85) return { word: "FAR", hint: "maybe the next room", color: "var(--amber)" };
+  return { word: "VERY FAR", hint: "far away or behind walls", color: "var(--red)" };
+}
+
+// The same words for the connection signal (these match step 2 on the page).
+function linkZone(v) {
+  const r = Math.round(v);
+  if (r >= 1) return { word: "VERY CLOSE", hint: "right here – within about a metre", color: "var(--green)" };
+  if (r === 0) return { word: "CLOSE", hint: "within a few metres – up close Bluetooth can't tell more. Look and listen here!", color: "var(--green)" };
+  if (r >= -9) return { word: "NEAR", hint: "probably in the same room", color: "var(--lime)" };
+  if (r >= -20) return { word: "FAR", hint: "maybe the next room", color: "var(--amber)" };
+  return { word: "VERY FAR", hint: "far away or behind walls", color: "var(--red)" };
+}
+const zoneOf = (d, v) => (isLink(d) ? linkZone(v) : zone(v));
+
+// -------------------------------------------------- data arrives by itself
+// The program PUSHES each new reading to this page (Server-Sent Events), so a
+// reading reaches the meter a few milliseconds after the laptop hears it.
+function connect() {
+  if (new URLSearchParams(location.search).has("poll")) return keepAsking();
+  const source = new EventSource("/events");
+  source.onmessage = (event) => receive(JSON.parse(event.data));
+  source.onerror = () => { connected = false; drawStatus(); };   // it reconnects by itself
+  // Safety net: if something blocks pushed updates, ask for them instead.
+  setTimeout(() => { if (!gotAt) { source.close(); keepAsking(); } }, 4000);
+}
+
+async function keepAsking() {
+  for (;;) {
+    try {
+      const reply = await fetch("/state", { cache: "no-store" });
+      receive(await reply.json());
+    } catch (e) {
+      connected = false; drawStatus();
+    }
+    await new Promise((done) => setTimeout(done, 150));
+  }
+}
+
+function receive(msg) {
+  if (msg.full) devices.clear();                       // the whole list, twice a second...
+  for (const d of msg.devices) devices.set(d.id, d);   // ...and only the changes in between
+  if (msg.total_pps !== undefined) totalPps = msg.total_pps;
+  status = msg.status; serverNow = msg.now; gotAt = performance.now(); connected = true;
+  draw();
+}
+// Keep the "not heard for N seconds" text ticking, and notice if the program stops.
+setInterval(() => { if (performance.now() - gotAt > 3500) connected = false; draw(); }, 500);
+
+async function post(path, body) {
+  try {
+    const reply = await fetch(path, { method: "POST", body, headers: { "Content-Type": "text/plain" } });
+    return await reply.json();
+  } catch (e) {
+    return { error: "The Device Finder program did not answer." };
+  }
+}
+
+// ------------------------------------------------- which devices are "new"
+// (Only for LE signals - the "wake your phone up" route.)
+const isHidden = (d) => !!hidden &&
+  (hidden.ids.has(d.id) || (d.fp !== "" && d.score < 5 && hidden.fps.has(d.fp)));
+function isNew(d, t) {
+  if (d.kind !== "le") return false;
+  if (hidden) return !isHidden(d) && d.first >= hidden.at - 5;
+  return t - d.first < 60 && d.first - status.started > 15;
+}
+
+function draw() {
+  drawStatus();
+  if (!status) return;
+  const t = now();
+  const list = [...devices.values()];
+  const pick = pickDevice(list, t);
+  const d = pick.d;
+  // The beeps follow the meter - but stop when the phone did not answer the last call.
+  tracked = d && d.fast !== null && t - d.last < freshFor(d) && !(d.followed && d.reach && !d.reach.ok) ? d : null;
+  drawMeter(pick, t);
+  dingForNew(list, t);
+  if (performance.now() - lastListDraw > 500) {        // the list is calmer: twice a second
+    drawList(list, t, d);
+    drawRemembered(t);
+    lastListDraw = performance.now();
+  }
+  $("autoBtn").hidden = !lockedId;
+  $("unfollowBtn").hidden = !status.follow;
+}
+
+function setStatus(kind, strong, rest) {
+  $("dot").className = "dot " + kind;
+  const box = $("statusText");
+  box.textContent = "";
+  if (strong) {
+    const b = document.createElement("span");
+    b.className = "warn";
+    b.textContent = strong + " ";
+    box.appendChild(b);
+  }
+  box.appendChild(document.createTextNode(rest));
+}
+
+function followedLabel() {
+  if (!status || !status.follow) return "";
+  const d = devices.get(status.follow.key);
+  return d ? d.label : status.follow.address;
+}
+
+function drawStatus() {
+  if (!connected) return setStatus("bad", "Lost contact with the Device Finder program.", "Is its black window still open?");
+  if (!status) return setStatus("", "", "Connecting…");
+  if (status.le === "off") return setStatus("bad", "Bluetooth is OFF on this laptop.", "Turn it on: Windows Settings → Bluetooth & devices.");
+  if (status.le === "error") return setStatus("bad", "Bluetooth problem:", status.le_error + " – trying again…");
+  if (status.le === "starting") return setStatus("", "", "Starting Bluetooth…");
+  const t = now();
+  const heard = [...devices.values()].filter((d) => d.kind === "le" && t - d.last < 30).length;
+  let extra = status.follow ? ` · following ${followedLabel()}` : "";
+  if (status.search === "on") extra += " · looking for visible devices";
+  if (heard === 0) return setStatus("live", "", "Listening… no LE signals here right now" + extra);
+  setStatus("live", "", `Listening · ${heard} LE device${heard === 1 ? "" : "s"} · ${totalPps} signals per second` + extra);
+}
+
+// Which device goes on the big meter?
+function pickDevice(list, t) {
+  if (lockedId) {
+    let d = devices.get(lockedId);
+    if (d) { lockedFp = d.fp; lockedLast = d.last; }
+    // Android changes its Bluetooth address every ~15 minutes. If "our" device
+    // went quiet and a device with the same message shape just appeared, follow it.
+    if ((!d || t - d.last > 6) && lockedFp) {
+      const twin = list
+        .filter((x) => x.id !== lockedId && x.fp === lockedFp && x.first >= lockedLast - 3 && t - x.last < 3)
+        .sort((a, b) => level(b) - level(a))[0];
+      if (twin) {
+        lockedId = twin.id; d = twin;
+        followNote = "It changed its Bluetooth address (a privacy feature). Still following it.";
+      }
+    }
+    return { d: d || null, how: "chosen", isNew: false };
+  }
+  const followed = status.follow ? devices.get(status.follow.key) : null;
+  if (followed) return { d: followed, how: "follow", isNew: false };
+  const fresh = list.filter((x) => x.fast !== null && t - x.last < 5 && !isHidden(x));
+  const newOnes = hidden ? fresh.filter((x) => isNew(x, t) && x.score >= 1) : [];
+  const pool = newOnes.length ? newOnes : fresh.filter((x) => x.score >= 5);
+  const best = pool.sort((a, b) => b.score - a.score || fracOf(b, level(b)) - fracOf(a, level(a)))[0];
+  return { d: best || null, how: "auto", isNew: !!best && newOnes.includes(best) };
+}
+
+function drawMeter(pick, t) {
+  const d = pick.d;
+  $("why").classList.toggle("isnew", pick.isNew);
+  if (!d) {
+    $("who").textContent = pick.how === "auto" ? "Looking for your device…" : "Waiting for the device you chose…";
+    $("why").textContent = pick.how !== "auto" ? ""
+      : hidden ? "Waiting for a NEW signal. Now wake your phone up (step 3)."
+      : "Nothing to measure yet. Press Follow on your phone (step 1), or tap any device in the list below.";
+    $("reach").textContent = "";
+    return gauge(null, t);
+  }
+  $("who").textContent = d.label;
+  let why = d.guess;
+  if (pick.how === "auto") why = (pick.isNew ? "NEW signal! " : "Best guess: ") + why;
+  if (pick.how === "follow") why = "Following it: the laptop calls it about once a second";
+  if (pick.how === "chosen" && followNote) why += " · " + followNote;
+  $("why").textContent = why;
+  gauge(d, t);
+  drawReach(d);
+}
+
+function gauge(d, t) {
+  const tr = $("trend");
+  if (!d) {
+    fill.style.opacity = 0; rawDot.style.opacity = 0;
+    $("dbm").textContent = "--"; $("unit").textContent = "dBm";
+    $("word").textContent = " "; $("hint").textContent = " "; tr.textContent = "";
+    return;
+  }
+  const value = level(d), age = t - d.last;
+  const link = d.via === "link";
+  const noAnswer = d.followed && d.reach && !d.reach.ok;        // the last call was not answered
+  const stale = value === null || age > freshFor(d) || noAnswer;
+  let word, hint, color = "var(--muted)";
+  if (noAnswer) {
+    const quiet = Math.round(t - (d.fast !== null ? d.last : status.follow ? status.follow.since : d.first));
+    word = "OUT OF REACH";
+    hint = `No answer for ${quiet} s – its Bluetooth is off, or it is more than ~10 m away. Keep walking.`;
+  } else if (value === null) {
+    word = d.followed ? "CALLING…" : "NO SIGNAL YET";
+    hint = d.followed ? "Waiting for the first answer (a call takes 1–5 s)." : " ";
+  } else if (stale) {
+    word = "NO SIGNAL";
+    hint = d.via === "visible" ? `Last seen ${Math.round(age)} s ago. Windows refreshes visible devices every 10–20 s.`
+         : `Not heard for ${Math.round(age)} seconds. Go back to where it was stronger.`;
+  } else {
+    ({ word, hint, color } = zoneOf(d, value));
+  }
+  $("unit").textContent = link || (value === null && d.followed) ? "connection signal" : "dBm";
+  if (value === null) {
+    fill.style.opacity = 0; rawDot.style.opacity = 0;
+    $("dbm").textContent = "--";
+  } else {
+    fill.style.opacity = 1;
+    fill.style.strokeDasharray = `${(ARC * fracOf(d, value)).toFixed(1)} ${ARC}`;
+    fill.style.stroke = stale ? "var(--muted)" : color;
+    const angle = Math.PI * (1 - fracOf(d, d.raw));     // white dot = the very latest reading
+    rawDot.setAttribute("cx", (150 + 120 * Math.cos(angle)).toFixed(1));
+    rawDot.setAttribute("cy", (150 - 120 * Math.sin(angle)).toFixed(1));
+    rawDot.style.opacity = stale || d.via === "visible" ? 0 : 1;
+    $("dbm").textContent = numText(d, value);
+  }
+  $("word").textContent = word;
+  $("word").style.color = color;
+  $("hint").textContent = hint;
+  if (stale) { tr.textContent = ""; }
+  else if (d.via === "visible") { tr.textContent = "Windows refreshes this every 10–20 s"; tr.style.color = "var(--muted)"; }
+  else if (d.sure && d.trend > 0.6) { tr.textContent = "▲ Getting stronger – keep going this way"; tr.style.color = "var(--green)"; }
+  else if (d.sure && d.trend < -0.6) { tr.textContent = "▼ Getting weaker – turn around"; tr.style.color = "var(--red)"; }
+  else { tr.textContent = "● Steady – try a few steps in another direction"; tr.style.color = "var(--muted)"; }
+}
+
+// The last few calls, as dots: ● answered, ○ no answer.
+function drawReach(d) {
+  const box = $("reach");
+  if (!d.followed || !d.reach) { box.textContent = ""; return; }
+  const dots = [...d.reach.hist].map((c) => `<span class="${c === "1" ? "ok" : "miss"}">${c === "1" ? "●" : "○"}</span>`).join("");
+  const last = d.reach.ok ? `answered in ${(d.reach.ms / 1000).toFixed(1)} s` : "no answer";
+  const f = status.follow;
+  const score = f && f.key === d.id ? ` · ${f.answered} of ${f.calls} calls answered` : "";
+  const problem = f && f.state === "error" ? ` · problem: ${esc(f.error)}` : "";
+  box.innerHTML = `<span class="dots">${dots}</span>last call: ${last}${score}${problem}`;
+}
+
+// A "ding" the first time a NEW, possibly-phone signal appears.
+function dingForNew(list, t) {
+  if (!hidden) return;
+  for (const d of list) {
+    if (d.score < 1 || t - d.last > 5 || !isNew(d, t)) continue;
+    const key = d.fp || d.id;                 // same message shape = same device
+    if (dinged.has(key)) continue;
+    dinged.add(key);
+    ding();
+  }
+}
+
+// ----------------------------------------------------------------- the list
+const cards = new Map();
+const group = (d, t) => (d.followed ? 4 : isNew(d, t) && d.score >= 1 ? 3 : d.score >= 5 ? 2 : d.score > -3 ? 1 : 0);
+const followButton = (d) =>
+  `<button class="mini${d.followed ? " on" : ""}" type="button" data-follow="${esc(d.address)}">${d.followed ? "Following · stop" : "Follow"}</button>`;
+
+function drawList(list, t, current) {
+  const box = $("devs");
+  const shown = list
+    .filter((d) => !isHidden(d) &&
+      (d.followed || t - d.last < (d.kind === "classic" ? 120 : 30) || (current && d.id === current.id)))
+    .sort((a, b) => group(b, t) - group(a, t) || fracOf(b, level(b)) - fracOf(a, level(a)));
+  const keep = new Set();
+  for (const d of shown) {
+    let el = cards.get(d.id);
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "dev"; el.dataset.id = d.id; el.setAttribute("role", "button"); el.tabIndex = 0;
+      el.innerHTML = '<div class="dev-top"><span class="dev-name"></span><span class="badges"></span></div>' +
+                     '<div class="dev-guess"></div><div class="bar"><i></i></div>' +
+                     '<div class="dev-foot"><span class="dev-num"></span><span class="dev-act"></span></div>';
+      cards.set(d.id, el);
+    }
+    const value = level(d), age = t - d.last;
+    const isCurrent = !!current && d.id === current.id;
+    const fresh = isNew(d, t);
+    el.querySelector(".dev-name").textContent = d.label;
+    let badges = "";
+    if (fresh) badges += '<span class="badge new">NEW</span>';
+    if (d.followed) badges += '<span class="badge">FOLLOWING</span>';
+    else if (d.kind === "classic") badges += '<span class="badge">CLASSIC</span>';
+    if (isCurrent) badges += '<span class="badge">ON METER</span>';
+    el.querySelector(".badges").innerHTML = badges;
+    el.querySelector(".dev-guess").textContent = d.guess;
+    const bar = el.querySelector(".bar i");
+    bar.style.width = value === null ? "0%" : (fracOf(d, value) * 100).toFixed(0) + "%";
+    bar.style.background = value === null ? "var(--track)" : zoneOf(d, value).color;
+    let text;
+    if (value === null) text = d.followed ? (d.reach ? "no answer yet" : "calling…") : "no reading yet";
+    else if (isLink(d)) text = `connection signal ${numText(d, value)} · ${zoneOf(d, value).word.toLowerCase()}`;
+    else text = `${Math.round(value)} dBm · ${zoneOf(d, value).word.toLowerCase()}`;
+    if (d.via === "le") text += age < 3 ? ` · ${d.pps} signals/s` : ` · last heard ${Math.round(age)} s ago`;
+    else if (d.via === "link") text += (d.reach && !d.reach.ok ? " · no answer now" : "") + ` · ${Math.round(age)} s ago`;
+    else if (value !== null) text += ` · visible · ${Math.round(age)} s ago` + (d.visible === false ? " · gone now" : "");
+    el.querySelector(".dev-num").textContent = `${text} · ends ${d.id.slice(-5)}`;
+    const act = el.querySelector(".dev-act");
+    const actHtml = d.kind === "classic" && d.address ? followButton(d) : "";
+    if (act.dataset.html !== actHtml) { act.innerHTML = actHtml; act.dataset.html = actHtml; }
+    el.classList.toggle("tracked", isCurrent);
+    el.classList.toggle("fresh", fresh && d.score >= 1);
+    el.classList.toggle("likely", d.score >= 5);
+    el.classList.toggle("not", d.score <= -3);
+    box.appendChild(el);                       // re-appending moves it into sorted order
+    keep.add(d.id);
+  }
+  for (const [id, el] of cards) if (!keep.has(id)) { el.remove(); cards.delete(id); }
+  $("empty").hidden = shown.length > 0;
+  $("empty").textContent = hidden ? "No new signals yet. Wake your phone up (step 3) and keep watching."
+                                  : "Nothing heard yet…";
+  drawHideInfo();
+  drawSearchInfo();
+}
+
+function lockOn(id) {
+  lockedId = id; lockedFp = ""; followNote = ""; lastListDraw = -1e9;
+  draw();
+}
+$("devs").addEventListener("click", (e) => {
+  if (e.target.closest("[data-follow]")) return;        // the Follow button has its own job
+  const el = e.target.closest(".dev");
+  if (el) lockOn(el.dataset.id);
+});
+$("devs").addEventListener("keydown", (e) => {
+  if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("dev")) { e.preventDefault(); lockOn(e.target.dataset.id); }
+});
+$("autoBtn").addEventListener("click", () => {
+  lockedId = null; followNote = ""; lastListDraw = -1e9;
+  draw();
+});
+
+// ------------------------------------------------------------- following
+// Any "Follow" button, in the list or in step 1: start calling that address (or stop).
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-follow]");
+  if (!b) return;
+  wakeAudio();
+  const address = b.dataset.follow;
+  const already = status && status.follow && status.follow.address === address;
+  post("/follow", already ? "" : address);
+});
+$("unfollowBtn").addEventListener("click", () => post("/follow", ""));
+$("addrBtn").addEventListener("click", async () => {
+  const reply = await post("/follow", $("addrBox").value.trim());
+  $("followInfo").textContent = reply.error || "";
+});
+
+const ago = (t, when) => {
+  const s = Math.max(0, t - when);
+  if (s < 90) return "just now";
+  if (s < 5400) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return "on " + new Date(when * 1000).toLocaleDateString();
+};
+
+function drawRemembered(t) {
+  const list = status.remembered || [];
+  const following = status.follow ? status.follow.address : null;
+  const html = list.map((r) => {
+    const on = r.address === following;
+    const name = r.name || (r.kind === "PHONE" ? "A phone" : `A ${r.kind}`);
+    const kind = r.kind === "PHONE" ? "phone" : r.kind;
+    const when = r.seen ? ` · seen ${ago(t, r.seen)}` : "";
+    return `<span class="chip${on ? " on" : ""}"><span><b>${esc(name)}</b><small>${esc(kind)} · …${esc(r.address.slice(-5))}${when}</small></span>` +
+           `<button class="mini${on ? " on" : ""}" type="button" data-follow="${esc(r.address)}">${on ? "Following · stop" : "Follow"}</button></span>`;
+  }).join("");
+  const box = $("remembered");
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+  if (!list.length) $("followInfo").textContent =
+    'No phone remembered yet. Switch on "Look for visible devices" below and open your phone\'s Bluetooth settings once - it will appear here.';
+}
+
+// ------------------------------------------------------ "Hide what's here now"
+$("hideBtn").addEventListener("click", () => {
+  wakeAudio();                                 // so the "ding" is allowed to play later
+  if (hidden) {
+    hidden = null;
+  } else {
+    hidden = { ids: new Set(), fps: new Set(), at: now() };
+    for (const d of devices.values()) {
+      if (d.kind !== "le") continue;
+      hidden.ids.add(d.id);
+      if (d.fp && d.score < 5) hidden.fps.add(d.fp);   // also hide it after an address change
+    }
+    if (lockedId && hidden.ids.has(lockedId)) { lockedId = null; followNote = ""; }
+  }
+  dinged.clear(); lastListDraw = -1e9;
+  draw();
+});
+
+function drawHideInfo() {
+  $("hideBtn").textContent = hidden ? "Show everything again" : "Hide what's here now";
+  $("hideInfo").textContent = hidden ? `${hidden.ids.size} hidden. Anything new gets a NEW badge.` : "";
+}
+
+// --------------------------------------------- "Look for visible devices"
+$("searchBtn").addEventListener("click", () => post("/search", status && status.search === "off" ? "on" : "off"));
+
+function drawSearchInfo() {
+  const s = status.search, on = s === "on";
+  $("searchBtn").textContent = s === "paused" ? "Look for visible devices: paused" : `Look for visible devices: ${on ? "ON" : "OFF"}`;
+  $("searchBtn").classList.toggle("primary", on || s === "paused");
+  const box = $("searchInfo");
+  box.hidden = s === "off";
+  if (s === "error") {
+    box.textContent = "The search didn't work: " + status.search_error;
+  } else if (s === "paused") {
+    box.textContent = "Paused while following: the search would write its own readings (a different scale) into the " +
+      "same place as the connection readings and confuse the meter. It continues when you stop following.";
+  } else if (on) {
+    const visible = [...devices.values()].filter((d) => d.visible).map((d) => d.label);
+    box.textContent = "Windows is searching… " +
+      (visible.length ? `Visible now: ${visible.join(", ")}. ` : "Nothing visible yet. ") +
+      "Each visible device gets a fresh signal every 10–20 s. Android phones are visible only while their " +
+      "Bluetooth settings screen is open. (This slows the LE list a little.)";
+  }
+}
+
+// -------------------------------------------------------------- meter speed
+for (const b of document.querySelectorAll("[data-speed]")) {
+  b.addEventListener("click", () => {
+    speed = b.dataset.speed;
+    try { localStorage.setItem("deviceFinderSpeed", speed); } catch (e) { /* private window */ }
+    showSpeed(); lastListDraw = -1e9;
+    draw();
+  });
+}
+function showSpeed() {
+  for (const b of document.querySelectorAll("[data-speed]"))
+    b.setAttribute("aria-pressed", String(b.dataset.speed === speed));
+}
+
+// -------------------------------------------------------------------- sound
+// Browsers only allow sound after you click something, so the buttons wake it up.
+function wakeAudio() {
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    audio.resume();
+  } catch (e) { audio = null; }
+}
+
+$("soundBtn").addEventListener("click", () => {
+  wakeAudio();
+  soundOn = !soundOn && !!audio;
+  $("soundBtn").textContent = soundOn ? "Turn sound off" : "Turn sound on";
+  if (soundOn && !ticking) { ticking = true; tick(); }
+});
+
+function tick() {
+  if (!soundOn) { ticking = false; return; }
+  let wait = 400;
+  if (tracked) {
+    const f = fracOf(tracked, level(tracked));
+    beep(450 + 900 * f, 0.07);
+    wait = 1100 * Math.pow(0.08, f);          // weak: ~1 beep/s, strong: ~11 beeps/s
+  }
+  setTimeout(tick, wait);
+}
+
+function beep(freq, length, delay = 0) {
+  if (!audio) return;
+  const t = audio.currentTime + delay;
+  const osc = audio.createOscillator(), vol = audio.createGain();
+  osc.type = "sine";
+  osc.frequency.value = freq;
+  vol.gain.setValueAtTime(0.0001, t);
+  vol.gain.exponentialRampToValueAtTime(0.25, t + 0.008);
+  vol.gain.exponentialRampToValueAtTime(0.0001, t + length);
+  osc.connect(vol).connect(audio.destination);
+  osc.start(t);
+  osc.stop(t + length + 0.01);
+}
+
+function ding() { beep(1320, 0.14); beep(1760, 0.2, 0.16); }
+
+showSpeed();
+connect();
+</script>
+</body>
+</html>
